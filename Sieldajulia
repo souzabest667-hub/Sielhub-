@@ -1,0 +1,361 @@
+
+--[[
+    SIEL OPTIMIZATION V5
+    ULTRA PERFORMANCE
+    Preserva texturas e materiais.
+]]
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local guiParent = player:WaitForChild("PlayerGui")
+
+local old = guiParent:FindFirstChild("SielOptimization")
+if old then old:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SielOptimization"
+gui.ResetOnSpawn = false
+gui.Parent = guiParent
+
+local purple = Color3.fromRGB(145, 75, 240)
+local dark = Color3.fromRGB(18, 15, 27)
+local white = Color3.fromRGB(255, 255, 255)
+
+-- Salvar configurações originais
+local saved = {}
+local active = {}
+
+local function save(obj, property, value)
+    if not saved[obj] then
+        saved[obj] = {}
+    end
+
+    if saved[obj][property] == nil then
+        local ok, original = pcall(function()
+            return obj[property]
+        end)
+
+        if ok then
+            saved[obj][property] = original
+        end
+    end
+
+    pcall(function()
+        obj[property] = value
+    end)
+end
+
+local function restoreAll()
+    for obj, properties in pairs(saved) do
+        if obj and obj.Parent then
+            for property, value in pairs(properties) do
+                pcall(function()
+                    obj[property] = value
+                end)
+            end
+        end
+    end
+
+    table.clear(saved)
+    table.clear(active)
+end
+
+-- Interface
+local panel = Instance.new("Frame")
+panel.Size = UDim2.fromOffset(280, 440)
+panel.Position = UDim2.new(0.5, -140, 0.5, -220)
+panel.BackgroundColor3 = dark
+panel.BorderSizePixel = 0
+panel.Active = true
+panel.Parent = gui
+
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 13)
+
+local outline = Instance.new("UIStroke")
+outline.Color = purple
+outline.Thickness = 2
+outline.Parent = panel
+
+local header = Instance.new("TextLabel")
+header.Size = UDim2.new(1, -90, 0, 45)
+header.Position = UDim2.fromOffset(12, 0)
+header.BackgroundTransparency = 1
+header.Text = "SIEL OPTIMIZATION"
+header.TextColor3 = white
+header.TextSize = 16
+header.Font = Enum.Font.GothamBold
+header.TextXAlignment = Enum.TextXAlignment.Left
+header.Parent = panel
+
+-- Arrastar painel
+local dragging = false
+local dragStart
+local startPosition
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = panel.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local delta = input.Position - dragStart
+
+        panel.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Minimizar
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.fromOffset(34, 30)
+minimize.Position = UDim2.new(1, -76, 0, 7)
+minimize.Text = "—"
+minimize.TextColor3 = white
+minimize.BackgroundColor3 = purple
+minimize.Parent = panel
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 7)
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(34, 30)
+close.Position = UDim2.new(1, -38, 0, 7)
+close.Text = "X"
+close.TextColor3 = white
+close.BackgroundColor3 = Color3.fromRGB(170, 45, 65)
+close.Parent = panel
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 7)
+
+local floating = Instance.new("TextButton")
+floating.Size = UDim2.fromOffset(48, 48)
+floating.Position = UDim2.new(0, 18, 0.5, -24)
+floating.Text = "S"
+floating.TextColor3 = white
+floating.TextSize = 23
+floating.Font = Enum.Font.GothamBold
+floating.BackgroundColor3 = purple
+floating.Visible = false
+floating.Parent = gui
+Instance.new("UICorner", floating).CornerRadius = UDim.new(1, 0)
+
+minimize.MouseButton1Click:Connect(function()
+    panel.Visible = false
+    floating.Visible = true
+end)
+
+floating.MouseButton1Click:Connect(function()
+    panel.Visible = true
+    floating.Visible = false
+end)
+
+-- FPS
+local fpsLabel = Instance.new("TextLabel")
+fpsLabel.Size = UDim2.new(1, -20, 0, 25)
+fpsLabel.Position = UDim2.fromOffset(10, 43)
+fpsLabel.BackgroundTransparency = 1
+fpsLabel.TextColor3 = Color3.fromRGB(200, 170, 255)
+fpsLabel.Font = Enum.Font.GothamBold
+fpsLabel.TextSize = 13
+fpsLabel.Text = "FPS: --"
+fpsLabel.Parent = panel
+
+local frames = 0
+local elapsed = 0
+
+local fpsConnection = RunService.RenderStepped:Connect(function(dt)
+    frames += 1
+    elapsed += dt
+
+    if elapsed >= 1 then
+        fpsLabel.Text = "FPS: " .. frames
+        frames = 0
+        elapsed = 0
+    end
+end)
+
+-- Otimizações
+local function optimizeObject(obj)
+    if obj:IsA("BasePart") then
+        save(obj, "CastShadow", false)
+
+        if obj:IsA("MeshPart") then
+            save(obj, "RenderFidelity", Enum.RenderFidelity.Performance)
+        end
+
+    elseif obj:IsA("ParticleEmitter")
+    or obj:IsA("Trail")
+    or obj:IsA("Beam") then
+        save(obj, "Enabled", false)
+
+    elseif obj:IsA("PostEffect") then
+        save(obj, "Enabled", false)
+
+    elseif obj:IsA("PointLight")
+    or obj:IsA("SpotLight")
+    or obj:IsA("SurfaceLight") then
+        save(obj, "Enabled", false)
+    end
+end
+
+local function applyWorkspace()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        optimizeObject(obj)
+    end
+
+    for _, obj in ipairs(Lighting:GetDescendants()) do
+        optimizeObject(obj)
+    end
+end
+
+local function setBoost(on)
+    active.boost = on
+
+    if on then
+        Lighting.GlobalShadows = false
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+        applyWorkspace()
+    end
+end
+
+-- Botões
+local function createButton(name, y, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -24, 0, 34)
+    button.Position = UDim2.fromOffset(12, y)
+    button.BackgroundColor3 = Color3.fromRGB(43, 34, 59)
+    button.TextColor3 = white
+    button.Text = name .. " [OFF]"
+    button.Font = Enum.Font.GothamSemibold
+    button.TextSize = 13
+    button.Parent = panel
+
+    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+
+    local enabled = false
+
+    button.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        button.Text = name .. (enabled and " [ON]" or " [OFF]")
+        button.BackgroundColor3 = enabled
+            and Color3.fromRGB(105, 55, 165)
+            or Color3.fromRGB(43, 34, 59)
+
+        callback(enabled)
+    end)
+
+    return button
+end
+
+createButton("ULTRA FPS BOOST", 76, setBoost)
+
+createButton("No Shadows", 116, function(on)
+    save(Lighting, "GlobalShadows", on and false or saved[Lighting].GlobalShadows)
+end)
+
+createButton("No Fog", 156, function(on)
+    if on then
+        save(Lighting, "FogStart", 0)
+        save(Lighting, "FogEnd", 100000)
+    else
+        restoreAll()
+    end
+end)
+
+createButton("No Particles", 196, function(on)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter")
+        or obj:IsA("Trail")
+        or obj:IsA("Beam") then
+            if on then
+                save(obj, "Enabled", false)
+            end
+        end
+    end
+end)
+
+createButton("No Lights", 236, function(on)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("PointLight")
+        or obj:IsA("SpotLight")
+        or obj:IsA("SurfaceLight") then
+            if on then
+                save(obj, "Enabled", false)
+            end
+        end
+    end
+end)
+
+createButton("No Post Effects", 276, function(on)
+    for _, obj in ipairs(Lighting:GetDescendants()) do
+        if obj:IsA("PostEffect") and on then
+            save(obj, "Enabled", false)
+        end
+    end
+end)
+
+-- Restaurar
+local restore = Instance.new("TextButton")
+restore.Size = UDim2.new(1, -24, 0, 35)
+restore.Position = UDim2.fromOffset(12, 322)
+restore.BackgroundColor3 = Color3.fromRGB(65, 115, 80)
+restore.TextColor3 = white
+restore.Text = "RESTORE GRAPHICS"
+restore.Font = Enum.Font.GothamBold
+restore.TextSize = 13
+restore.Parent = panel
+Instance.new("UICorner", restore).CornerRadius = UDim.new(0, 8)
+
+restore.MouseButton1Click:Connect(function()
+    restoreAll()
+
+    Lighting.EnvironmentDiffuseScale = 1
+    Lighting.EnvironmentSpecularScale = 1
+
+    for _, obj in ipairs(panel:GetChildren()) do
+        if obj:IsA("TextButton") and obj.Text:find("%[") then
+            obj.Text = obj.Text:gsub("%[ON%]", "[OFF]")
+            obj.BackgroundColor3 = Color3.fromRGB(43, 34, 59)
+        end
+    end
+end)
+
+close.MouseButton1Click:Connect(function()
+    fpsConnection:Disconnect()
+    restoreAll()
+    gui:Destroy()
+end)
+
+-- Limpeza de objetos novos enquanto o boost está ativo
+local addedConnection = workspace.DescendantAdded:Connect(function(obj)
+    if active.boost then
+        optimizeObject(obj)
+    end
+end)
+
+gui.Destroying:Connect(function()
+    if addedConnection then
+        addedConnection:Disconnect()
+    end
+end)
